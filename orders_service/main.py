@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import requests
 
@@ -9,7 +11,19 @@ USERS_SERVICE_URL = "http://users_service:8001"
 
 app = FastAPI(title="Orders Service")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 Base.metadata.create_all(bind=engine)
+
+class OrderCreate(BaseModel):
+    product: str
+    user_id: int
 
 def get_db():
     db = SessionLocal()
@@ -19,12 +33,12 @@ def get_db():
         db.close()
 
 @app.post("/orders/")
-def create_order(product: str, user_id: int, db: Session = Depends(get_db)):
-    order = Order(product=product, user_id=user_id)
-    db.add(order)
+def create_order(order: OrderCreate, db: Session = Depends(get_db)):
+    new_order = Order(product=order.product, user_id=order.user_id)
+    db.add(new_order)
     db.commit()
-    db.refresh(order)
-    return order
+    db.refresh(new_order)
+    return new_order
 
 @app.get("/orders/{order_id}")
 def get_order(order_id: int, db: Session = Depends(get_db)):
