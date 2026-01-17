@@ -1,11 +1,9 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:15
     container_name: postgres
     environment:
-      POSTGRES_DB: microservices_db
+      POSTGRES_DB: products_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -16,22 +14,59 @@ services:
       timeout: 5s
       retries: 5
 
-  users_service:
-    build: ./users_service
-    container_name: users_service
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_DATABASE: orders_db
+      MYSQL_USER: mysql
+      MYSQL_PASSWORD: mysql
+      MYSQL_ROOT_PASSWORD: root
     ports:
-      - "8001:8001"
+      - "3306:3306"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysql -u$$MYSQL_USER -p$$MYSQL_PASSWORD -e 'SELECT 1' $$MYSQL_DATABASE"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  products_service:
+    build: ./products_service
+    container_name: products_service
+    ports:
+      - "8081:8081"
     depends_on:
       postgres:
         condition: service_healthy
+
+  shipping_service:
+    build: ./shipping_service
+    container_name: shipping_service
+    ports:
+      - "8082:8082"
 
   orders_service:
     build: ./orders_service
     container_name: orders_service
     ports:
-      - "8002:8002"
+      - "8083:8083"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
-      users_service:
-        condition: service_started
+    restart: unless-stopped
+
+  api_gateway:
+    build: ./api_gateway
+    container_name: api_gateway
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      - products_service
+      - shipping_service
+      - orders_service
